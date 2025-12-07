@@ -45,18 +45,16 @@ retriever = MultiQueryRetriever.from_llm(
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-Use ONLY the context provided below to answer the question.
+You are a strict RAG assistant.
 
-DO NOT copy or include internal citation numbers such as [1], [2], [3], or references from the PDF's bibliography.
-Ignore any citation numbers present in the text.
+RULES:
+1. Use ONLY the information from the context below.
+2. DO NOT generate your own citations, numbers, DOIs, authors, or references.
+3. Only answer the question using plain natural language.
+4. Citations will be added by the system later, so DO NOT include them inside your answer.
 
 If the answer is not in the context, say:
 "I don't know based on the provided documents."
-
-Provide the answer in clean paragraphs.
-
-After the answer, include ONLY the page-level citations that the system provides.
-Do NOT generate or rewrite citation numbers yourself.
 
 Context:
 {context}
@@ -64,9 +62,10 @@ Context:
 Question:
 {question}
 
-Answer:
+Answer (no citations, no references):
 """
 )
+
 
 # 5. Build the RetrievalQA chain
 qa = RetrievalQA.from_chain_type(
@@ -76,33 +75,35 @@ qa = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": prompt},
     return_source_documents=True
 )
-
-# 6. Ask function (clean output + citation fix)
-def ask(question):
+# ask for output
+def ask(question, return_data=False):
     result = qa({"query": question})
     answer = result["result"]
 
-    print("\nANSWER:")
-    print(answer)
-
-    # If answer says "I don't know", do NOT show citations
-    if "I don't know" in answer or "don't know" in answer:
-        print("\nCITATIONS:")
-        print("No relevant sources found.")
-        return
-
-    # Otherwise show relevant citations
-    print("\nCITATIONS:")
+    citations = []
     seen = set()
 
-    for doc in result["source_documents"]:
-        name = os.path.basename(doc.metadata.get("source", ""))
-        page = doc.metadata.get("page", "?")
+    if "I don't know" not in answer:
+        for doc in result["source_documents"]:
+            name = os.path.basename(doc.metadata.get("source", ""))
+            page = doc.metadata.get("page", "?")
+            key = (name, page)
+            if key not in seen:
+                seen.add(key)
+                citations.append(key)
 
-        key = (name, page)
-        if key not in seen:
-            seen.add(key)
-            print(f"- {name}, p.{page}")
+    if return_data:
+        return answer, citations
+
+    # Console fallback
+    print("\nANSWER:")
+    print(answer)
+    print("\nCITATIONS:")
+    if len(citations) == 0:
+        print("No relevant sources found.")
+    else:
+        for src, pg in citations:
+            print(f"- {src}, p.{pg}")
 
 
 # 7. Chat loop
