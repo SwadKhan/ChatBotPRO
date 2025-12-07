@@ -1,0 +1,7 @@
+{
+    "python.defaultInterpreterPath": "/home/dil-mahmud-khan/Downloads/ChatbotPro/venv/bin/python",
+    "python.analysis.extraPaths": [
+        "/home/dil-mahmud-khan/Downloads/ChatbotPro/venv/lib/python3.12/site-packages"
+    ],
+    "python.venvPath": "/home/dil-mahmud-khan/Downloads/ChatbotPro/venv"
+}
