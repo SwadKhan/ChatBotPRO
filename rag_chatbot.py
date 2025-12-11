@@ -1,18 +1,12 @@
 import os
 from dotenv import load_dotenv
 
-# Embeddings + Vector Store
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.vectorstores import Chroma
-
-# LLM (Groq)
 from langchain_groq import ChatGroq
 
-# RAG components
 from langchain.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
-
-# Advanced retrieval
 from langchain.retrievers.multi_query import MultiQueryRetriever
 
 load_dotenv()
@@ -108,7 +102,7 @@ def ask(question, return_data=False):
 
 # 7. Chat loop
 if __name__ == "__main__":
-    print("Multi-Query RAG Chatbot Ready.")
+    print("Chatbot Pro is Ready.")
 
     while True:
         q = input("\nAsk: ")

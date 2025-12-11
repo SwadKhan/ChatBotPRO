@@ -4,14 +4,14 @@ from rag_chatbot import ask   # Import your ask() function from existing RAG cod
 
 st.set_page_config(page_title="RAG Chatbot", page_icon="📚")
 
-st.title(" Multi-Query RAG Chatbot")
-st.write("Ask questions based on the knowledge.")
+st.title(" Chatbot Pro is ready to go")
+# st.write("Ask questions based on the knowledge.")
 
 # Input box
 user_input = st.text_input("Ask a question:", "")
 
 # When user clicks button
-if st.button("Submit"):
+if st.button("Ask"):
     if user_input.strip() == "":
         st.warning("Please enter a question.")
     else:
