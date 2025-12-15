@@ -1,0 +1,72 @@
+# Chatbot Pro Process Flow and Data Flow Explanation
+
+## Overview
+Chatbot Pro is a RAG (Retrieval-Augmented Generation) chatbot built with Streamlit, LangChain, ChromaDB, and Groq LLM. It allows users to ask questions based on a pre-built knowledge base from PDFs, images, and PowerPoint files, or switch to general mode for broader answers.
+
+## Key Components
+1. **build_kb.py**: Builds the initial knowledge base by processing files in the `data/` folder.
+2. **rag_chatbot.py**: Contains the RAG logic, embeddings, vector store, and LLM integration.
+3. **app.py**: Streamlit web app for user interaction, file uploads, and chat.
+
+## Data Flow
+
+### 1. Knowledge Base Building (build_kb.py)
+- **Input**: Files in `data/` folder (PDFs, images, PPTX).
+- **Process**:
+  - PDFs: Loaded with PyPDFLoader, split into chunks (800 chars, 150 overlap).
+  - Images: OCR with Tesseract, extracted text chunked.
+  - PPTX: Text extracted from slides, chunked.
+- **Output**: Chunks stored in ChromaDB vector store with metadata (source, page/slide).
+- **Embeddings**: FastEmbedEmbeddings for vectorization.
+
+### 2. RAG Query Processing (rag_chatbot.py)
+- **Retriever**: ChromaDB retriever fetches top 20 relevant chunks.
+- **LLM**: Groq Llama-3.1-8B-Instant (temperature=0 for consistency).
+- **Prompt**: Strict RAG prompt ensuring answers only from context; if no info, responds with "I don't have information..." and nothing else.
+- **Output**: Answer + citations from retrieved docs.
+
+### 3. General Mode Query
+- **Process**: Direct LLM query without retrieval.
+- **Prompt**: Simple "Answer the question" template.
+- **Output**: Answer (may hallucinate).
+
+### 4. App Interaction (app.py)
+- **Mode Selection**: Radio button for RAG or General mode.
+- **File Upload**: Temporary processing, chunks added to ChromaDB (metadata updated for source), but citations filtered to `data/` only.
+- **Chat**:
+  - Input question.
+  - Process based on mode.
+  - Display answer and unique filtered citations.
+  - Store in session history (max 5 Q/A pairs, FIFO).
+  - Option to clear history.
+- **History Display**: Shows last 5 conversations with citations.
+
+## Citation Filtering
+- Citations only shown for RAG mode.
+- Filtered to sources starting with "data/" to exclude uploaded files.
+- Duplicates removed, formatted nicely (pages or "from image/slide").
+- Format: Source file, page number or image/slide indicator.
+
+## Session Management
+- History stored in Streamlit session state.
+- Persists across interactions in the same session.
+- Limited to 5 entries; manual clear option available.
+
+## Dependencies
+- LangChain for RAG pipeline.
+- ChromaDB for vector storage.
+- FastEmbed for embeddings.
+- Tesseract for OCR.
+- Streamlit for UI.
+- Groq API for LLM.
+
+## Flow Diagram (Text)
+User Input -> Mode Check -> If RAG: Retrieve from ChromaDB -> Generate Answer -> Filter Citations -> Display
+                -> If General: Direct LLM -> Display
+-> Add to History -> Show History (with clear option)
+
+## Notes
+- Uploaded files are added to the vector store but citations are filtered out.
+- ChromaDB persists data in `chroma_db/` folder.
+- Environment variables loaded from `.env` (e.g., Groq API key).
+- RAG mode prevents hallucination by strict prompting.

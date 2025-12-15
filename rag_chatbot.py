@@ -5,9 +5,9 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 
-from langchain.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
-from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
@@ -27,13 +27,8 @@ llm = ChatGroq(
     temperature=0
 )
 
-# 3. Build the retriever (Multi-Query Retrieval)
-base_retriever = vectordb.as_retriever(search_kwargs={"k": 4})
-
-retriever = MultiQueryRetriever.from_llm(
-    retriever=base_retriever,
-    llm=llm
-)
+# 3. Build the retriever
+retriever = vectordb.as_retriever(search_kwargs={"k": 20})
 
 # 4. RAG Prompt
 prompt = PromptTemplate(
@@ -46,58 +41,58 @@ RULES:
 2. DO NOT generate your own citations, numbers, DOIs, authors, or references.
 3. Only answer the question using plain natural language.
 4. Citations will be added by the system later, so DO NOT include them inside your answer.
+5. If the context does not provide information to answer the question, say "I don't have information on that topic in my knowledge base." and nothing else.
 
-If the answer is not in the context, say:
-"I don't know based on the provided documents."
+Context: {context}
 
-Context:
-{context}
+Question: {question}
 
-Question:
-{question}
-
-Answer (no citations, no references):
-"""
+Answer:"""
 )
 
+# 5. Build the RAG chain
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
 
-# 5. Build the RetrievalQA chain
-qa = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=retriever,
-    chain_type_kwargs={"prompt": prompt},
-    return_source_documents=True
+rag_chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
 )
-# ask for output
+
+# Function to ask questions
 def ask(question, return_data=False):
-    result = qa({"query": question})
-    answer = result["result"]
+    try:
+        answer = rag_chain.invoke(question)
+        
+        # Get sources
+        docs = retriever.invoke(question)
+        citations = []
+        for doc in docs:
+            src = doc.metadata.get("source", "Unknown")
+            pg = doc.metadata.get("page", doc.metadata.get("slide", "N/A"))
+            citations.append((src, pg))
+        
+        if return_data:
+            return answer, citations
+        else:
+            return answer
+    except Exception as e:
+        return f"Error: {str(e)}"
 
-    citations = []
-    seen = set()
 
-    if "I don't know" not in answer:
-        for doc in result["source_documents"]:
-            name = os.path.basename(doc.metadata.get("source", ""))
-            page = doc.metadata.get("page", "?")
-            key = (name, page)
-            if key not in seen:
-                seen.add(key)
-                citations.append(key)
-
-    if return_data:
-        return answer, citations
-
-    # Console fallback
-    print("\nANSWER:")
-    print(answer)
-    print("\nCITATIONS:")
-    if len(citations) == 0:
-        print("No relevant sources found.")
-    else:
-        for src, pg in citations:
-            print(f"- {src}, p.{pg}")
+# General ask function (no RAG, may hallucinate)
+def general_ask(question):
+    try:
+        prompt_general = PromptTemplate(
+            input_variables=["question"],
+            template="Answer the question: {question}"
+        )
+        general_chain = prompt_general | llm | StrOutputParser()
+        return general_chain.invoke(question)
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 # 7. Chat loop
@@ -108,4 +103,5 @@ if __name__ == "__main__":
         q = input("\nAsk: ")
         if q.lower().strip() in ["exit", "quit"]:
             break
-        ask(q)
+        answer = ask(q)
+        print(f"Answer: {answer}")
