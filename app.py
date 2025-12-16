@@ -103,7 +103,7 @@ if st.button("Ask"):
         if mode == "RAG (strictly from knowledge base)":
             answer, citations = ask(user_input, return_data=True)
             # Filter citations to only from data/
-            filtered_citations = [(src, pg) for src, pg in citations if src.startswith("data")]
+            filtered_citations = [(src, pg) for src, pg in citations if isinstance(src, str) and src.startswith("data")]
             # Remove duplicates
             unique_citations = list(dict.fromkeys(filtered_citations))
             # Citation accuracy: percentage of retrieved docs from knowledge base

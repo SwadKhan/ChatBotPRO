@@ -79,7 +79,11 @@ def ask(question, return_data=False):
         else:
             return answer
     except Exception as e:
-        return f"Error: {str(e)}"
+        error_msg = f"Error: {str(e)}"
+        if return_data:
+            return error_msg, []  # Return tuple format to match expected output
+        else:
+            return error_msg
 
 
 # General ask function (no RAG, may hallucinate)
