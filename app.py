@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import time  # Add time import for latency measurement
 from rag_chatbot import ask, general_ask, vectordb  # Import ask and general_ask functions and vectordb
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -97,18 +98,30 @@ if st.button("Ask"):
     if user_input.strip() == "":
         st.warning("Please enter a question.")
     else:
+        start_time = time.time()  # Start timing
+        
         if mode == "RAG (strictly from knowledge base)":
             answer, citations = ask(user_input, return_data=True)
             # Filter citations to only from data/
             filtered_citations = [(src, pg) for src, pg in citations if src.startswith("data")]
             # Remove duplicates
             unique_citations = list(dict.fromkeys(filtered_citations))
+            # Citation accuracy: percentage of retrieved docs from knowledge base
+            total_retrieved = len(citations)
+            accurate_citations = len(unique_citations)
+            citation_accuracy = (accurate_citations / total_retrieved * 100) if total_retrieved > 0 else 0
         else:
             answer = general_ask(user_input)
-            filtered_citations = []
+            unique_citations = []
+            citation_accuracy = None  # No citations in general mode
+            total_retrieved = 0
+            accurate_citations = 0
+        
+        end_time = time.time()  # End timing
+        latency = end_time - start_time
 
         # Add to history
-        st.session_state.history.append((user_input, answer, filtered_citations))
+        st.session_state.history.append((user_input, answer, unique_citations))
         if len(st.session_state.history) > 5:
             st.session_state.history.pop(0)
 
@@ -122,6 +135,14 @@ if st.button("Ask"):
                     st.write(f"- **{src}** (from image or slide)")
                 else:
                     st.write(f"- **{src}**, page {pg}")
+
+        # Display metrics
+        st.subheader("System Metrics")
+        st.write(f"**Latency**: {latency:.2f} seconds")
+        if citation_accuracy is not None:
+            st.write(f"**Citation Accuracy**: {citation_accuracy:.1f}% ({accurate_citations}/{total_retrieved} citations from knowledge base)")
+        else:
+            st.write("**Citation Accuracy**: N/A (General mode)")
 
 # Display history
 if st.session_state.history:

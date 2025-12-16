@@ -1,0 +1,310 @@
+# Comprehensive Guide to Chatbot Pro: Detailed Process Flow and Implementation
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Architecture and Components](#architecture-and-components)
+3. [Detailed Data Flow](#detailed-data-flow)
+4. [Step-by-Step Implementation](#step-by-step-implementation)
+5. [Code Walkthrough](#code-walkthrough)
+6. [Configuration and Setup](#configuration-and-setup)
+7. [Usage Examples](#usage-examples)
+8. [Troubleshooting](#troubleshooting)
+9. [Performance Considerations](#performance-considerations)
+
+## Project Overview
+
+Chatbot Pro is a sophisticated Retrieval-Augmented Generation (RAG) chatbot that combines document processing, vector search, and large language models to provide accurate, context-aware answers. It supports multiple document types and offers both strict knowledge-base mode and general conversational mode.
+
+### Key Capabilities
+- **Multi-Modal Document Processing**: Handles PDFs, images (via OCR), and PowerPoint presentations
+- **Dual Operation Modes**: RAG (knowledge-base only) vs General (broader answers)
+- **Citation Management**: Provides source references with duplicate removal
+- **Conversation History**: Maintains last 5 interactions with manual clear option
+- **Real-Time File Uploads**: Temporary processing of additional documents
+- **Web-Based Interface**: Streamlit-powered UI for easy interaction
+
+## Architecture and Components
+
+### Core Files Structure
+```
+ChatBotPRO/
+├── app.py                 # Main Streamlit application
+├── build_kb.py           # Knowledge base construction script
+├── rag_chatbot.py        # RAG logic and LLM integration
+├── inspect_db.py         # Database inspection utility
+├── process_flow.txt      # High-level process documentation
+├── requirements.txt      # Python dependencies
+├── README.md            # User-facing documentation
+├── .env                 # Environment variables (API keys)
+├── .gitignore           # Git ignore rules
+├── data/                # Source documents (ignored in git)
+├── chroma_db/           # Vector database (ignored in git)
+└── __pycache__/         # Python bytecode cache
+```
+
+### Technology Stack
+- **Frontend**: Streamlit for web interface
+- **Backend Processing**: Python with LangChain framework
+- **Vector Database**: ChromaDB for embeddings storage
+- **Embeddings**: FastEmbed for high-performance vectorization
+- **LLM**: Groq API with Llama-3.1-8B-Instant model
+- **OCR**: Tesseract for image text extraction
+- **Document Processing**: PyMuPDF (PDFs), python-pptx (PowerPoint)
+
+## Detailed Data Flow
+
+### Phase 1: Knowledge Base Construction
+1. **File Discovery**: Scan `data/` directory for supported files (.pdf, .jpg, .png, .jpeg, .pptx)
+2. **Document Loading**:
+   - PDFs: Use PyPDFLoader to extract text and metadata (page numbers)
+   - Images: Apply Tesseract OCR, extract text content
+   - PowerPoint: Parse slides, extract text from shapes
+3. **Text Chunking**: Split documents into 800-character chunks with 150-character overlap
+4. **Metadata Assignment**: Attach source file, page/slide info to each chunk
+5. **Vectorization**: Convert chunks to embeddings using FastEmbed
+6. **Storage**: Persist vectors and metadata in ChromaDB
+
+### Phase 2: Query Processing (RAG Mode)
+1. **Question Input**: User submits question via Streamlit interface
+2. **Embedding Generation**: Convert question to vector using same FastEmbed model
+3. **Similarity Search**: Retrieve top 20 most similar chunks from ChromaDB
+4. **Context Assembly**: Combine retrieved chunks into context string
+5. **LLM Generation**: Send context + question to Groq LLM with strict RAG prompt
+6. **Citation Extraction**: Collect metadata from retrieved chunks
+7. **Filtering**: Remove citations not from `data/` sources, eliminate duplicates
+8. **Response Formatting**: Structure answer and citations for display
+
+### Phase 3: Query Processing (General Mode)
+1. **Question Input**: User submits question
+2. **Direct LLM Call**: Send question to Groq LLM without retrieval
+3. **Response Generation**: LLM provides answer (may include external knowledge)
+4. **No Citations**: Citations section remains empty
+
+### Phase 4: Session Management
+1. **History Storage**: Maintain Q/A pairs in Streamlit session state
+2. **FIFO Management**: Keep only last 5 interactions, discard older ones
+3. **Manual Clear**: Provide button to reset history to empty
+4. **Persistence**: History survives page refreshes but resets on app restart
+
+## Step-by-Step Implementation
+
+### 1. Environment Setup
+```bash
+# Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+# or
+source venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install Tesseract OCR
+# Windows: winget install UB-Mannheim.TesseractOCR
+# Linux: sudo apt-get install tesseract-ocr
+# Mac: brew install tesseract
+```
+
+### 2. API Configuration
+```bash
+# Create .env file
+echo "GROQ_API_KEY=your_api_key_here" > .env
+```
+
+### 3. Document Preparation
+```bash
+# Place documents in data/ folder
+mkdir data
+# Copy PDFs, images, PPTX files to data/
+```
+
+### 4. Knowledge Base Building
+```bash
+python build_kb.py
+# This creates chroma_db/ with vectorized documents
+```
+
+### 5. Application Launch
+```bash
+streamlit run app.py
+# Opens web interface at http://localhost:8501
+```
+
+## Code Walkthrough
+
+### build_kb.py: Knowledge Base Construction
+```python
+# Load and process different file types
+def load_all_pdfs():
+    for pdf in glob.glob("data/*.pdf"):
+        loader = PyPDFLoader(pdf)
+        docs = loader.load()  # Extracts text + metadata
+        chunks = splitter.split_documents(docs)
+        # Store in ChromaDB
+
+# Similar functions for images and PowerPoint
+# Final storage with embeddings
+vectordb = Chroma.from_documents(chunks, embeddings, persist_directory="chroma_db")
+```
+
+### rag_chatbot.py: RAG Logic
+```python
+# Vector store setup
+embeddings = FastEmbedEmbeddings()
+vectordb = Chroma(persist_directory="chroma_db", embedding_function=embeddings)
+retriever = vectordb.as_retriever(search_kwargs={"k": 20})
+
+# RAG prompt with strict rules
+prompt = PromptTemplate(
+    template="""
+    You are a strict RAG assistant.
+    RULES:
+    1. Use ONLY the context below.
+    2. If context doesn't have info, say "I don't have information..." and nothing else.
+    Context: {context}
+    Question: {question}
+    Answer:
+    """
+)
+
+# Chain construction
+rag_chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt | llm | StrOutputParser()
+)
+
+def ask(question):
+    docs = retriever.invoke(question)
+    if not docs:
+        return "No relevant information found.", []
+    answer = rag_chain.invoke(question)
+    citations = [(doc.metadata["source"], doc.metadata.get("page", "N/A")) for doc in docs]
+    return answer, citations
+```
+
+### app.py: Web Interface
+```python
+# Mode selection
+mode = st.radio("Select mode:", ["RAG (strictly from knowledge base)", "General (may hallucinate)"])
+
+# Question processing
+if st.button("Ask"):
+    if mode == "RAG...":
+        answer, citations = ask(user_input)
+        filtered_citations = [c for c in citations if c[0].startswith("data")]
+        unique_citations = list(dict.fromkeys(filtered_citations))
+    else:
+        answer = general_ask(user_input)
+        unique_citations = []
+
+    # Display results
+    st.write(answer)
+    for src, pg in unique_citations:
+        st.write(f"- {src}, page {pg}")
+
+    # Update history
+    st.session_state.history.append((user_input, answer, unique_citations))
+    if len(st.session_state.history) > 5:
+        st.session_state.history.pop(0)
+```
+
+## Configuration and Setup
+
+### Environment Variables
+- `GROQ_API_KEY`: Required for LLM access
+- `TESSDATA_PREFIX`: Optional, for custom Tesseract data
+
+### Chunking Parameters
+- `chunk_size`: 800 characters (balance between context and precision)
+- `chunk_overlap`: 150 characters (ensure continuity)
+
+### Retrieval Settings
+- `k`: 20 chunks retrieved (increase for better recall, decrease for speed)
+
+### Model Configuration
+- Model: llama-3.1-8b-instant
+- Temperature: 0 (deterministic responses)
+- Max tokens: Default (adjust if needed)
+
+## Usage Examples
+
+### Example 1: RAG Mode Query
+**Input**: "What is mantrap in security?"
+**Process**:
+1. Question embedded and searched in ChromaDB
+2. Relevant chunks from data/Chapter_1_v9.0.pdf retrieved
+3. Context sent to LLM with RAG prompt
+4. Answer generated using only retrieved content
+5. Citations: data\Chapter_1_v9.0.pdf, page 77
+
+### Example 2: General Mode Query
+**Input**: "What is the capital of France?"
+**Process**:
+1. Direct LLM call without retrieval
+2. LLM answers from training data
+3. No citations provided
+
+### Example 3: File Upload
+**Input**: Upload "new_document.pdf"
+**Process**:
+1. Temporary file created
+2. Document processed and chunked
+3. Chunks added to ChromaDB with source="new_document.pdf"
+4. Citations filtered to exclude this source
+
+## Troubleshooting
+
+### Common Issues
+
+**"Tesseract not found"**
+- Solution: Install Tesseract and ensure it's in PATH
+- Verification: `tesseract --version`
+
+**"Module not found" errors**
+- Solution: `pip install -r requirements.txt`
+- Check: Python version compatibility
+
+**Empty answers in RAG mode**
+- Check: Knowledge base built (`ls chroma_db/`)
+- Check: API key in `.env`
+- Check: Question relevance to documents
+
+**Slow performance**
+- Reduce `k` in retriever
+- Use smaller chunk sizes
+- Limit document count
+
+**Memory issues**
+- Clear history manually
+- Restart Streamlit app
+- Reduce session state usage
+
+### Debug Steps
+1. Check console output for errors
+2. Verify `.env` file exists
+3. Test with `python rag_chatbot.py` directly
+4. Inspect database with `python inspect_db.py`
+
+## Performance Considerations
+
+### Optimization Strategies
+- **Chunk Size**: 800 chars provides good balance
+- **Overlap**: 150 chars prevents context loss
+- **Retrieval Count**: 20 chunks for comprehensive coverage
+- **Embedding Model**: FastEmbed chosen for speed vs accuracy trade-off
+
+### Scalability
+- **Document Limit**: Test with 100+ documents
+- **Chunk Count**: Monitor total chunks in database
+- **Memory Usage**: Streamlit sessions consume RAM
+- **API Limits**: Monitor Groq API usage/costs
+
+### Best Practices
+- Regular knowledge base rebuilds for new documents
+- Monitor citation quality for retrieval effectiveness
+- Use RAG mode for domain-specific questions
+- General mode for open-ended queries
+
+---
+
+This comprehensive guide provides everything needed to understand, deploy, and maintain Chatbot Pro. For additional support, refer to the README.md or check the GitHub repository issues.
