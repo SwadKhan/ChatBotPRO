@@ -1,6 +1,6 @@
 # ChatBotPRO - Multi-Modal Retrieval-Augmented Generation (RAG) System
 
-> **🌐 Live Demo:** _coming soon — deployed on Streamlit Community Cloud_
+> **🌐 Live Demo:** [chatbotpro on Streamlit Cloud](https://chatbotpro-fnivcyjrojgjema6cqoumv.streamlit.app/)
 
 ## Overview
 
