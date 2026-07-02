@@ -9,8 +9,9 @@ import pytesseract
 from PIL import Image
 from pptx import Presentation
 
-# Configure Tesseract path
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Configure Tesseract path (Windows only — on Linux/cloud it is found on PATH)
+if os.name == "nt":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 DATA_DIR = "data"
 CHROMA_DIR = "chroma_db"

@@ -1,5 +1,7 @@
 # ChatBotPRO - Multi-Modal Retrieval-Augmented Generation (RAG) System
 
+> **🌐 Live Demo:** _coming soon — deployed on Streamlit Community Cloud_
+
 ## Overview
 
 ChatBotPRO is an advanced Retrieval-Augmented Generation (RAG) system that allows users to query and get answers from various document types including PDFs, images, and PowerPoint presentations. The system uses optical character recognition (OCR) for images, processes PowerPoint slides, and provides accurate, context-aware answers with citations using a Large Language Model.
@@ -199,6 +201,21 @@ streamlit run app.py
 - Use smaller chunk sizes for more precise retrieval
 - Limit video length for faster processing
 - Clear chroma_db/ folder if rebuilding from scratch
+
+## Deployment (Streamlit Community Cloud)
+
+This repo is ready to deploy on [Streamlit Community Cloud](https://share.streamlit.io) (free):
+
+1. Sign in at share.streamlit.io with GitHub
+2. **Create app** → pick this repo, branch `deploy`, main file `app.py`
+3. In **Advanced settings**: choose **Python 3.12** and add the secret:
+   ```toml
+   GROQ_API_KEY = "your_groq_api_key"
+   ```
+4. Deploy. On first boot the app automatically builds the ChromaDB knowledge base
+   from the PDFs in `data/` (takes a few minutes), then serves the chatbot.
+
+System packages (Tesseract OCR) are installed automatically via `packages.txt`.
 
 ## Contributing
 

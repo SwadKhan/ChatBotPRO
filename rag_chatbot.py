@@ -21,6 +21,15 @@ vectordb = Chroma(
     embedding_function=embeddings
 )
 
+# On a fresh deployment there is no chroma_db/ yet — build it once from data/
+if vectordb._collection.count() == 0:
+    from build_kb import build_vector_db
+    build_vector_db()
+    vectordb = Chroma(
+        persist_directory=CHROMA_DIR,
+        embedding_function=embeddings
+    )
+
 # 2. Load the language model (Groq)
 llm = ChatGroq(
     model="llama-3.1-8b-instant",

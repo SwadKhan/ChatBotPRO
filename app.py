@@ -10,8 +10,9 @@ import tempfile
 from langchain_community.document_loaders import PyPDFLoader
 from pptx import Presentation
 
-# Configure Tesseract path
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Configure Tesseract path (Windows only — on Linux/cloud it is found on PATH)
+if os.name == "nt":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 st.set_page_config(page_title="RAG Chatbot", page_icon="📚")
 
@@ -80,9 +81,6 @@ if uploaded_file is not None:
                     st.success(f"PowerPoint '{uploaded_file.name}' processed and added to knowledge base.")
                 else:
                     st.warning("No content found in the PowerPoint file.")
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
-
         except Exception as e:
             st.error(f"Error processing file: {e}")
 
